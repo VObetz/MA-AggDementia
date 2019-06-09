@@ -1,0 +1,60 @@
+# I used two tutorials to write this script:
+# http://biopython.org/DIST/docs/tutorial/Tutorial.html#htoc129
+# https://docs.python.org/3/library/csv.html
+
+from Bio import Entrez, Medline
+import csv
+
+# Query built with trial and error using PubMed's advanced search
+
+query = '(((Dementia OR Alzheimer )AND (Aggression OR Agitation OR Hitting OR Spitting OR Biting OR Disruptive vocalization OR violent behavior OR BPSD OR Aggressive behavior OR Agitated behavior)AND (Nonpharmacological OR Behavioral intervention OR Psychotherapy OR snoezelen OR multisensory therapy OR behavioral analysis OR psychoeducation OR psychosocial)) 
+AND "2008/01/01"[PDat] : "2017/12/31"[PDat] )'
+
+Entrez.email = "vobetz@uccs.edu" 
+
+# Always tell NCBI who you are, per tutorial
+# This first search gets the total number of results
+
+handle = Entrez.egquery(term=query)
+record = Entrez.read(handle)
+count = None
+for row in record["eGQueryResult"]:
+     if row["DbName"]=="pubmed":
+        count = row["Count"]
+        
+# this search fetches all the PMIDs, based on the total from the last result
+handle = Entrez.esearch(db="pubmed", term=query, retmax=count)
+record = Entrez.read(handle)
+handle.close()
+idlist = record["IdList"]
+
+# this fetches the medline data for each PMID in our idlist
+handle = Entrez.efetch(db="pubmed", id=idlist, rettype="medline", retmode="text")
+records = Medline.parse(handle)
+
+# based on the specified fieldnames, medline records are written to a csv file
+with open('pubmed_results.csv', 'w') as csvfile:
+    fieldnames = ['PMID', 'TI', 'FAU', 'JT', 'DEP', 'DOI', 'AB']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, dialect='excel')
+    writer.writeheader()
+    for record in records:
+        
+# adds values to our tentative row if the key is listed in fieldnames
+        data = {key: value for key, value in record.items() if key in fieldnames}
+      
+        
+# DOI isn't a field present in the MEDLINE data, so I have to add that from AID
+        
+# Default is blank. If the AID field is not blank and one of its items contains '[doi]', it will be added.
+        data['DOI'] = None
+        if 'AID' in record:
+            for item in record['AID']:
+                if '[doi]' in item:
+                    data['DOI'] = item.split(' [doi]')[0]
+      
+# writes the row
+        writer.writerow(data)
+print('complete!')
+
+
+
